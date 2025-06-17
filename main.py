@@ -2,11 +2,11 @@ import os
 import sys
 import logging
 import argparse
-import subprocess
 import psutil
 import time
 import gc
 from pathlib import Path
+from utils.download_model import run_all_downloads
 
 
 def setup_logging():
@@ -132,121 +132,50 @@ def check_system_requirements():
 
 
 def download_models_if_needed():
-    """ดาวน์โหลดโมเดลถ้ายังไม่มี - ปรับปรุงการจัดการ memory"""
+    """ดาวน์โหลดโมเดลถ้ายังไม่มี (โดยใช้วิธี import)"""
     logger = logging.getLogger(__name__)
     
-    # ตรวจสอบว่ามีโมเดลอยู่แล้วหรือไม่
     models_dir = Path("./models")
     required_models = [
-        "deepseek-8b",
-        "qwen-vl-3b", 
-        "qwen-audio-7b",
-        "qwen-omni-3b",
-        "blip-vqa-base"
+        "deepseek-8b", "qwen-vl-3b", "qwen-audio-7b", 
+        "qwen-omni-3b", "blip-vqa-base"
     ]
     
-    missing_models = []
-    for model in required_models:
-        model_path = models_dir / model / "config.json"
-        if not model_path.exists():
-            missing_models.append(model)
+    missing_models = [
+        model for model in required_models 
+        if not (models_dir / model / "config.json").exists()
+    ]
     
     if missing_models:
         logger.info(f"Missing models detected: {missing_models}")
         logger.info("Starting model download process...")
         
-        # แสดง memory ก่อน download
         memory_before = monitor_memory()
         if memory_before:
             logger.info(f"Memory before download: {memory_before['process_mb']:.1f} MB")
-        
-        download_process = None
+            
         try:
-            # ตั้งค่า environment variables เพื่อลด memory usage
-            env = os.environ.copy()
-            env['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
-            env['TRANSFORMERS_OFFLINE'] = '0'
-            env['HF_HUB_DISABLE_SYMLINKS_WARNING'] = '1'
-            env['CUDA_VISIBLE_DEVICES'] = ''  # บังคับใช้ CPU เท่านั้น
+            # --- เรียกใช้ฟังก์ชันที่ import มาโดยตรง ---
+            success = run_all_downloads()
+            # -------------------------------------------
             
-            # รัน download_model.py ใน process แยก
-            download_process = subprocess.Popen([
-                sys.executable, "./utils/download_model.py"
-            ], 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE, 
-            text=True,
-            env=env,
-            bufsize=1,
-            universal_newlines=True
-            )
-            
-            # Monitor process แบบ real-time
-            start_time = time.time()
-            timeout = 3600  # 1 hour timeout
-            
-            while download_process.poll() is None:
-                # ตรวจสอบ timeout
-                if time.time() - start_time > timeout:
-                    logger.error("Download process timed out")
-                    download_process.kill()
-                    return False
-                
-                # แสดง memory usage ทุก 30 วินาที
-                if int(time.time() - start_time) % 30 == 0:
-                    memory_info = monitor_memory()
-                    if memory_info:
-                        logger.info(f"Download progress - Memory: {memory_info['process_mb']:.1f} MB, System: {memory_info['system_used_percent']:.1f}%")
-                
-                time.sleep(1)
-            
-            # รับผลลัพธ์
-            stdout, stderr = download_process.communicate()
-            
-            if download_process.returncode == 0:
-                logger.info("✓ Model download completed successfully")
-                
-                # แสดงผลลัพธ์สำคัญ
-                if stdout:
-                    for line in stdout.split('\n'):
-                        if 'Successfully downloaded' in line or 'Download Summary' in line:
-                            logger.info(f"  {line}")
-                
+            if success:
+                logger.info("✓ Model download process completed.")
                 return True
             else:
-                logger.error(f"✗ Model download failed (exit code: {download_process.returncode})")
-                if stderr:
-                    logger.error(f"Error output: {stderr}")
+                logger.error("✗ Model download process failed. Check logs from download script.")
                 return False
                 
         except Exception as e:
-            logger.error(f"Error during model download: {e}")
-            if download_process:
-                download_process.kill()
+            logger.error(f"An unexpected error occurred during the download process: {e}", exc_info=True)
             return False
         
         finally:
-            # ล้าง memory หลังจาก download เสร็จ
-            logger.info("Cleaning up after model download...")
-            
-            # รอให้ process จบสมบูรณ์
-            if download_process:
-                try:
-                    download_process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    download_process.kill()
-            
-            # ฆ่า process ที่อาจค้างอยู่
-            kill_process_by_name("download_model.py")
-            
-            # บังคับล้าง memory
+            logger.info("Cleaning up memory after download process...")
             force_cleanup_memory()
-            
-            # แสดง memory หลังล้าง
             memory_after = monitor_memory()
-            if memory_after and memory_before:
-                memory_diff = memory_after['process_mb'] - memory_before['process_mb']
-                logger.info(f"Memory after download: {memory_after['process_mb']:.1f} MB (diff: {memory_diff:+.1f} MB)")
+            if memory_after:
+                logger.info(f"Memory after download: {memory_after['process_mb']:.1f} MB")
     else:
         logger.info("✓ All required models are already available")
         return True
