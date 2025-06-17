@@ -1,0 +1,21 @@
+flask
+transformers
+torch
+torchvision
+torchaudio
+numpy
+scipy
+accelerate
+bitsandbytes
+requests
+psutil
+sentencepiece
+protobuf
+huggingface-hub
+huggingface_hub[hf_xet]
+librosa
+pdf2image
+qwen-omni-utils[decord] -U
+qwen_vl_utils
+opencv-python
+git+https://github.com/LLaVA-VL/LLaVA-NeXT.git

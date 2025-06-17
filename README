@@ -1,0 +1,632 @@
+# AI Model Server Documentation
+
+## Overview
+
+The AI Model Server is a Flask-based REST API that provides access to multiple AI models for text generation, vision-language understanding, audio processing, and multimodal interactions. The system supports dynamic model loading with memory optimization and GPU acceleration.
+
+## Features
+
+- **Multiple AI Models**: DeepSeek, Qwen-VL, Qwen-Audio, Qwen-Omni, BLIP-VQA
+- **Multimodal Support**: Text, Image, Audio, Video processing
+- **Dynamic Loading**: Models are loaded on-demand to optimize memory usage
+- **Memory Management**: Advanced memory cleanup and GPU cache management
+- **Quantization**: 4-bit and 8-bit quantization for reduced memory footprint
+- **Auto-download**: Automatic model downloading from Hugging Face Hub
+
+## System Requirements
+
+### Minimum Requirements
+- **RAM**: 16GB (32GB recommended for better performance)
+- **Storage**: 50GB free space for all models
+- **GPU**: NVIDIA GPU with 8GB+ VRAM (optional, CPU fallback available)
+- **Python**: 3.8 or higher
+
+### Recommended Requirements
+- **RAM**: 32GB+
+- **Storage**: 100GB+ SSD
+- **GPU**: NVIDIA RTX 3080/4080 or better with 12GB+ VRAM
+- **CPU**: 8+ cores for better performance
+
+## Project Structure
+
+Based on your project structure, here is the layout:
+
+```
+MODEL_DOCKER/
+├── __pycache__/          # Python cache files
+├── config/               # Configuration files
+├── logs/                 # Log files
+├── models/               # Downloaded AI models
+│   ├── deepseek-8b/
+│   ├── qwen-vl-3b/
+│   ├── qwen-audio-7b/
+│   ├── qwen-omni-3b/
+│   └── blip-vqa-base/
+├── tmp/                  # Temporary files (auto-created)
+├── utils/                # Utility modules
+│   ├── __pycache__/
+│   ├── __init__.py
+│   ├── download_model.py # Model download script
+│   └── tmp_manage.py     # Temporary file management
+├── venv/                 # Virtual environment
+├── .dockerignore
+├── .env                  # Environment variables
+├── app.py                # Main Flask application
+├── docker-compose.yml    # Docker compose configuration
+├── Dockerfile           # Docker configuration
+├── main.py              # Main entry point
+├── README.md            # Project documentation
+└── requirements.txt     # Python dependencies
+```
+
+### 1. Clone Repository
+```bash
+git clone <your-repo-url>
+cd ai-model-server
+```
+
+### 2. Install Dependencies
+```bash
+# Install main dependencies
+pip install -r requirements.txt
+
+# Note: Some packages may need specific installation order
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118  # For CUDA 11.8
+# OR for CPU only:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+```
+
+### 3. Requirements.txt Contents
+```
+flask
+transformers
+torch
+torchvision
+torchaudio
+numpy
+scipy
+accelerate
+bitsandbytes
+requests
+psutil
+sentencepiece
+protobuf
+huggingface-hub
+huggingface_hub[hf_xet]
+librosa
+pdf2image
+qwen-omni-utils[decord] -U
+qwen_vl_utils
+opencv-python
+git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
+```
+
+### 4. Installation Notes
+
+#### Important Dependencies
+- **qwen-omni-utils[decord]**: Required for Qwen-Omni multimodal processing
+- **qwen_vl_utils**: Essential utilities for Qwen-VL vision processing
+- **LLaVA-NeXT**: Advanced vision-language capabilities (installed from Git)
+- **bitsandbytes**: Required for model quantization (4-bit/8-bit)
+- **decord**: Video processing backend (installed with qwen-omni-utils)
+
+#### CUDA Installation
+For GPU acceleration, ensure CUDA is properly installed:
+```bash
+# Check CUDA version
+nvidia-smi
+
+# Install PyTorch with matching CUDA version
+# CUDA 11.8:
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+
+# CUDA 12.1:
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+## Quick Start
+
+### Option 1: Automatic Setup (Recommended)
+```bash
+# Download models and start server
+python main.py
+
+# Or with custom settings
+python main.py --host 0.0.0.0 --port 5000 --debug
+```
+
+### Option 2: Manual Setup
+```bash
+# Download models only
+python utils/download_model.py
+
+# Start server
+python app.py
+```
+
+### Option 3: Docker (if available)
+```bash
+docker build -t ai-model-server .
+docker run -p 5000:5000 --gpus all ai-model-server
+```
+
+## API Endpoints
+
+### Text Generation
+
+#### DeepSeek Text Generation
+**POST** `/generate/deepseek`
+
+Generate text using the DeepSeek reasoning model.
+
+**Request Body:**
+```json
+{
+  "prompt": "Explain quantum computing in simple terms",
+  "max_new_tokens": 256,
+  "temperature": 0.7
+}
+```
+
+**Response:**
+```json
+{
+  "response": "Quantum computing is a revolutionary approach..."
+}
+```
+
+### Vision & Language
+
+#### Qwen-VL Vision-Language
+**POST** `/generate/qwen_vl`
+
+Generate text responses based on images and text prompts.
+
+**Request Body:**
+```json
+{
+  "prompt": "Describe what you see in this image",
+  "image": "base64_encoded_image_string",
+  "max_new_tokens": 512
+}
+```
+
+**Response:**
+```json
+{
+  "response": "I can see a beautiful landscape with mountains..."
+}
+```
+
+#### BLIP Visual Q&A
+**POST** `/generate/blip_vqa`
+
+Answer questions about images using BLIP-VQA model.
+
+**Request Body:**
+```json
+{
+  "prompt": "What color is the car?",
+  "image": "base64_encoded_image_string"
+}
+```
+
+**Response:**
+```json
+{
+  "response": "red"
+}
+```
+
+### Audio Processing
+
+#### Qwen-Audio
+**POST** `/generate/qwen_audio`
+
+Process audio files and generate text responses.
+
+**Request Body:**
+```json
+{
+  "prompt": "Transcribe this audio",
+  "audio": "base64_encoded_audio_string",
+  "max_new_tokens": 512
+}
+```
+
+**Response:**
+```json
+{
+  "response": "Hello, this is a test audio message..."
+}
+```
+
+### Multimodal Processing
+
+#### Qwen-Omni (All-in-One)
+**POST** `/generate/qwen_omni`
+
+Process multiple modalities (text, image, audio, video) simultaneously.
+
+**Request Body:**
+```json
+{
+  "prompt": "Analyze this multimedia content",
+  "image": "base64_encoded_image_string",
+  "audio": "base64_encoded_audio_string",
+  "video": "base64_encoded_video_string",
+  "max_new_tokens": 512
+}
+```
+
+**Response:**
+```json
+{
+  "response": "Based on the image, audio, and video content...",
+  "model_type": "qwen_omni",
+  "generation_method": "multimodal_gpu",
+  "memory_optimized": true
+}
+```
+
+### Administrative Endpoints
+
+#### Memory Status
+**GET** `/admin/memory_status`
+
+Check current GPU and system memory usage.
+
+**Response:**
+```json
+{
+  "timestamp": 1642090800,
+  "gpu_available": true,
+  "gpu_total_gb": 24.0,
+  "gpu_allocated_gb": 8.5,
+  "gpu_free_gb": 15.5,
+  "memory_warning": false,
+  "multimodal_safe": true
+}
+```
+
+#### Model Status
+**GET** `/admin/model_status`
+
+Check the status of all available models.
+
+**Response:**
+```json
+{
+  "timestamp": 1642090800,
+  "available_models": ["deepseek", "qwen_vl", "qwen_audio", "qwen_omni", "blip_vqa"],
+  "model_configs": {
+    "deepseek": {
+      "type": "text",
+      "path": "./models/deepseek-8b",
+      "path_exists": true,
+      "quant_bits": 4
+    }
+  }
+}
+```
+
+#### Emergency Cleanup
+**POST** `/admin/emergency_cleanup`
+
+Force cleanup of GPU memory and temporary files.
+
+#### Temporary Files Management
+**GET** `/admin/temp_status` - Check temporary files
+**POST** `/admin/cleanup_temp` - Clean temporary files
+
+#### Health Check
+**GET** `/health`
+
+Basic health check endpoint.
+
+## Configuration
+
+### Model Configuration
+Models are configured in `MODELS_CONFIG` dictionary in `app.py`:
+
+```python
+MODELS_CONFIG = {
+    "deepseek": {
+        "path": "./models/deepseek-8b",
+        "loader": AutoModelForCausalLM,
+        "processor_loader": AutoTokenizer,
+        "type": "text",
+        "quant_bits": 4,
+        "max_memory": {0: "8GiB", "cpu": "32GiB"}
+    },
+    # ... other models
+}
+```
+
+### Environment Variables
+```bash
+# Memory optimization
+export PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+
+# Hugging Face settings
+export HF_HUB_DISABLE_SYMLINKS_WARNING=1
+export TRANSFORMERS_OFFLINE=0
+
+# For faster downloads
+export HF_HUB_ENABLE_HF_TRANSFER=1
+```
+
+## Memory Management
+
+### Automatic Memory Optimization
+- Dynamic model loading/unloading
+- GPU cache clearing after each request
+- Automatic fallback to CPU for memory-intensive operations
+- Quantization (4-bit/8-bit) to reduce memory usage
+
+### Manual Memory Management
+```bash
+# Force memory cleanup
+curl -X POST http://localhost:5000/admin/emergency_cleanup
+
+# Check memory status
+curl http://localhost:5000/admin/memory_status
+```
+
+### Memory-Efficient Usage Tips
+1. **Single Request**: Process one request at a time for best memory efficiency
+2. **Smaller Media**: Resize images/videos before encoding to base64
+3. **Text-First**: Use text-only endpoints when possible
+4. **Regular Cleanup**: Call cleanup endpoints periodically
+5. **Monitor Usage**: Check memory status before heavy operations
+
+## Dependencies Overview
+
+### Core Framework Dependencies
+- **flask**: Web framework for API server
+- **transformers**: Hugging Face model loading and processing
+- **torch/torchvision/torchaudio**: PyTorch ecosystem
+- **numpy/scipy**: Numerical computing
+- **requests**: HTTP client library
+
+### Video Processing Dependencies
+- **opencv-python**: Core video processing
+- **decord**: Efficient video decoding (installed with qwen-omni-utils)
+- **qwen-omni-utils**: Qwen-specific video processing utilities
+
+### Vision-Language Dependencies
+- **qwen_vl_utils**: Qwen vision-language utilities
+- **LLaVA-NeXT**: Advanced multimodal capabilities (from Git repository)
+- **pdf2image**: PDF to image conversion
+
+### Audio Processing Dependencies
+- **librosa**: Audio analysis and processing
+- **soundfile**: Audio I/O (automatically installed with librosa)
+
+### Model Optimization Dependencies
+- **bitsandbytes**: 4-bit and 8-bit quantization
+- **accelerate**: Memory-efficient model loading
+- **sentencepiece**: Tokenization for some models
+- **protobuf**: Protocol buffer support
+
+### Hugging Face Integration
+- **huggingface-hub**: Model repository access
+- **huggingface_hub[hf_xet]**: Extended transfer capabilities
+
+### Video Processing Dependencies
+- **opencv-python**: Core video processing
+- **decord**: Efficient video decoding (installed with qwen-omni-utils)
+- **qwen-omni-utils**: Qwen-specific video processing utilities
+
+### Vision-Language Dependencies
+- **qwen_vl_utils**: Qwen vision-language utilities
+- **LLaVA-NeXT**: Advanced multimodal capabilities
+- **transformers**: Core model loading and processing
+
+### Audio Processing Dependencies
+- **librosa**: Audio analysis and processing
+- **soundfile**: Audio I/O (automatically installed with librosa)
+
+### Model Optimization Dependencies
+- **bitsandbytes**: 4-bit and 8-bit quantization
+- **accelerate**: Memory-efficient model loading
+- **sentencepiece**: Tokenization for some models
+
+### Audio
+- **Formats**: WAV, MP3, FLAC, M4A
+- **Recommended**: WAV, 16kHz sample rate, mono
+- **Encoding**: Base64 string
+
+### Video
+- **Formats**: MP4, AVI, MOV, WebM
+- **Recommended**: MP4, max 30 seconds, 720p
+- **Processing**: Automatic frame extraction (8 frames max)
+- **Encoding**: Base64 string
+
+## Error Handling
+
+### Common Error Responses
+```json
+{
+  "error": "Error description",
+  "details": "Additional error information"
+}
+```
+
+### HTTP Status Codes
+- **200**: Success
+- **400**: Bad Request (missing parameters, invalid format)
+- **500**: Internal Server Error (model loading failed, processing error)
+- **503**: Service Unavailable (model not loaded)
+
+### Memory-Related Errors
+When GPU memory is insufficient, the system automatically:
+1. Falls back to CPU processing
+2. Switches to text-only mode
+3. Returns simplified responses with error notes
+
+## Performance Optimization
+
+### GPU Optimization
+- Use CUDA if available
+- Automatic mixed precision (AMP)
+- Memory-efficient attention mechanisms
+- Dynamic batch sizing
+
+### CPU Optimization
+- Multi-threaded processing
+- Optimized model loading
+- Memory pooling for frequent operations
+
+### Network Optimization
+- Gzip compression for responses
+- Efficient base64 encoding/decoding
+- Connection pooling
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. Model Download Fails
+```bash
+# Solution: Check internet connection and disk space
+python utils/download_model.py
+
+# Alternative: Manual download
+huggingface-cli download Qwen/Qwen2.5-VL-3B-Instruct --local-dir ./models/qwen-vl-3b
+```
+
+#### 2. CUDA Out of Memory
+```bash
+# Solution: Use smaller models or CPU fallback
+export CUDA_VISIBLE_DEVICES=""  # Force CPU
+```
+
+#### 3. Import Errors
+```bash
+# Common missing dependencies
+pip install opencv-python psutil
+
+# Qwen-specific utilities
+pip install qwen-omni-utils[decord] -U
+pip install qwen_vl_utils
+
+# LLaVA-NeXT (if installation failed)
+pip install git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
+
+# BitsAndBytes issues (common on some systems)
+pip uninstall bitsandbytes
+pip install bitsandbytes --no-cache-dir
+```
+
+#### 4. Port Already in Use
+```bash
+# Solution: Use different port
+python main.py --port 5001
+```
+
+### Debug Mode
+```bash
+# Enable debug logging
+python main.py --debug
+
+# Check logs
+tail -f ./logs/main.log
+```
+
+### Performance Monitoring
+```bash
+# Monitor GPU usage
+nvidia-smi -l 1
+
+# Monitor memory
+curl http://localhost:5000/admin/memory_status
+
+# Monitor system resources
+htop
+```
+
+## Development
+
+### Adding New Models
+1. Add model configuration to `MODELS_CONFIG` in `app.py`
+2. Create new endpoint in `app.py`
+3. Add download configuration in `utils/download_model.py`
+4. Test with sample requests
+
+### API Client Example
+```python
+import requests
+import base64
+
+# Load image
+with open("image.jpg", "rb") as f:
+    image_b64 = base64.b64encode(f.read()).decode()
+
+# Make request
+response = requests.post(
+    "http://localhost:5000/generate/qwen_vl",
+    json={
+        "prompt": "Describe this image",
+        "image": image_b64
+    }
+)
+
+result = response.json()
+print(result["response"])
+```
+
+### Testing
+```bash
+# Health check
+curl http://localhost:5000/health
+
+# Test text generation
+curl -X POST http://localhost:5000/generate/deepseek \
+  -H "Content-Type: application/json" \
+  -d '{"prompt": "Hello, world!"}'
+```
+
+## Security Considerations
+
+### Production Deployment
+- Use HTTPS in production
+- Implement authentication/authorization
+- Rate limiting for API endpoints
+- Input validation and sanitization
+- Resource monitoring and alerting
+
+### Resource Limits
+- Set maximum file sizes for uploads
+- Implement request timeouts
+- Monitor and limit concurrent requests
+- Use reverse proxy (nginx) for production
+
+## License and Credits
+
+### Models Used
+- **DeepSeek**: DeepSeek-R1 (Check DeepSeek license)
+- **Qwen Models**: Alibaba DAMO Academy (Check Qwen license)
+- **BLIP**: Salesforce Research (Check BLIP license)
+
+### Dependencies
+This project uses various open-source libraries. Please check their respective licenses for commercial use.
+
+## Support
+
+### Getting Help
+1. Check this documentation
+2. Review error logs in `./logs/main.log`
+3. Check GitHub issues
+4. Monitor system resources
+
+### Reporting Issues
+When reporting issues, please include:
+- System specifications (GPU, RAM, OS)
+- Error messages and logs
+- Steps to reproduce
+- Python and package versions
+
+---
+
+**Note**: This system requires significant computational resources. For production use, ensure adequate hardware and implement proper monitoring and security measures.
