@@ -1,4 +1,7 @@
+# Web Framework
 flask
+
+# Core ML/AI Libraries
 transformers
 torch
 torchvision
@@ -7,15 +10,24 @@ numpy
 scipy
 accelerate
 bitsandbytes
+
+# Hugging Face Hub and Fast Transfer
+huggingface-hub
+huggingface_hub[hf_xet]
+hf_transfer
+
+# Utilities and Processing
 requests
 psutil
 sentencepiece
 protobuf
-huggingface-hub
-huggingface_hub[hf_xet]
 librosa
 pdf2image
-qwen-omni-utils[decord] -U
-qwen_vl_utils
 opencv-python
+
+# Qwen-specific packages
+qwen-omni-utils[decord]
+qwen_vl_utils
+
+# LLaVA-NeXT (from git)
 git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
