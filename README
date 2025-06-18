@@ -32,7 +32,7 @@ The AI Model Server is a Flask-based REST API that provides access to multiple A
 Based on your project structure, here is the layout:
 
 ```
-MODEL_DOCKER/
+ai-model-server/
 ├── __pycache__/          # Python cache files
 ├── config/               # Configuration files
 ├── logs/                 # Log files
@@ -49,11 +49,8 @@ MODEL_DOCKER/
 │   ├── download_model.py # Model download script
 │   └── tmp_manage.py     # Temporary file management
 ├── venv/                 # Virtual environment
-├── .dockerignore
 ├── .env                  # Environment variables
 ├── app.py                # Main Flask application
-├── docker-compose.yml    # Docker compose configuration
-├── Dockerfile           # Docker configuration
 ├── main.py              # Main entry point
 ├── README.md            # Project documentation
 └── requirements.txt     # Python dependencies
@@ -78,7 +75,10 @@ pip install torch torchvision torchaudio --index-url https://download.pytorch.or
 
 ### 3. Requirements.txt Contents
 ```
+# Web Framework
 flask
+
+# Core ML/AI Libraries
 transformers
 torch
 torchvision
@@ -87,18 +87,28 @@ numpy
 scipy
 accelerate
 bitsandbytes
+
+# Hugging Face Hub and Fast Transfer
+huggingface-hub
+huggingface_hub[hf_xet]
+hf_transfer
+
+# Utilities and Processing
 requests
 psutil
 sentencepiece
 protobuf
-huggingface-hub
-huggingface_hub[hf_xet]
 librosa
 pdf2image
-qwen-omni-utils[decord] -U
-qwen_vl_utils
 opencv-python
+
+# Qwen-specific packages
+qwen-omni-utils[decord]
+qwen_vl_utils
+
+# LLaVA-NeXT (from git)
 git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
+
 ```
 
 ### 4. Installation Notes
@@ -106,7 +116,6 @@ git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
 #### Important Dependencies
 - **qwen-omni-utils[decord]**: Required for Qwen-Omni multimodal processing
 - **qwen_vl_utils**: Essential utilities for Qwen-VL vision processing
-- **LLaVA-NeXT**: Advanced vision-language capabilities (installed from Git)
 - **bitsandbytes**: Required for model quantization (4-bit/8-bit)
 - **decord**: Video processing backend (installed with qwen-omni-utils)
 
