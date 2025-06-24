@@ -106,9 +106,6 @@ opencv-python
 qwen-omni-utils[decord]
 qwen_vl_utils
 
-# LLaVA-NeXT (from git)
-git+https://github.com/LLaVA-VL/LLaVA-NeXT.git
-
 ```
 
 ### 4. Installation Notes
