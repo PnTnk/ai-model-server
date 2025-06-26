@@ -1,0 +1,115 @@
+
+services:
+  
+  ai-model-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production  # Changed from 'application' to 'production'
+    image: ai-model-server:latest
+    container_name: ai-model-server
+    
+    # GPU support (requires nvidia-docker)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    
+    ports:
+      - "5000:5000"
+    
+    volumes:
+      # Persistent model storage
+      - models_data:/app/models:rw
+      - logs_data:/app/logs:rw
+      - tmp_data:/app/tmp:rw
+      
+      # Cache directories for faster startup
+      - huggingface_cache:/app/cache/huggingface
+      - transformers_cache:/app/cache/transformers
+      - torch_cache:/app/cache/torch
+    
+    environment:
+      - FLASK_ENV=production
+      - FLASK_APP=app.py
+      - FLASK_DEBUG=0
+      - PYTHONPATH=/app
+      - CUDA_VISIBLE_DEVICES=0
+      - HF_HUB_ENABLE_HF_TRANSFER=1
+      - TOKENIZERS_PARALLELISM=false
+      
+      # Memory and performance tuning
+      - OMP_NUM_THREADS=4
+      - MKL_NUM_THREADS=4
+      - MALLOC_TRIM_THRESHOLD_=100000
+    
+    # Resource limits
+    mem_limit: 32g
+    memswap_limit: 32g
+    shm_size: 2g
+    
+    # Restart policy
+    restart: unless-stopped
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/admin/temp_status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
+  # Optional: Redis for caching (if needed)
+  redis:
+    image: redis:7-alpine
+    container_name: ai-model-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+
+  # Optional: Monitoring with Prometheus metrics
+  # prometheus:
+  #   image: prom/prometheus:latest
+  #   container_name: ai-model-prometheus
+  #   ports:
+  #     - "9090:9090"
+  #   volumes:
+  #     - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+  #     - prometheus_data:/prometheus
+  #   restart: unless-stopped
+
+volumes:
+  models_data:
+    driver: local
+  logs_data:
+    driver: local
+  tmp_data:
+    driver: local
+  huggingface_cache:
+    driver: local
+  transformers_cache:
+    driver: local
+  torch_cache:
+    driver: local
+  redis_data:
+    driver: local
+
+  # prometheus_data:
+  #   driver: local
+
+networks:
+  default:
+    name: ai-model-network
