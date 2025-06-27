@@ -33,27 +33,25 @@ Based on your project structure, here is the layout:
 
 ```
 ai-model-server/
-├── __pycache__/          # Python cache files
-├── config/               # Configuration files
-├── logs/                 # Log files
-├── models/               # Downloaded AI models
-│   ├── deepseek-8b/
+├── Dockerfile              # Multi-stage Docker build
+├── docker-compose.yml      # Service orchestration
+├── requirements.txt        # Python dependencies
+├── start.sh                # Container startup script
+├── app.py                  # Flask application
+├── main.py                 # Main entry point
+├── utils/                  # Utility modules
+│   ├── __init__.py
+│   ├── download_model.py   # Model downloading
+│   └── tmp_manage.py       # Temporary file management
+├── models/                 # Model storage (persistent)
+|   ├── deepseek-8b/
 │   ├── qwen-vl-3b/
 │   ├── qwen-audio-7b/
 │   ├── qwen-omni-3b/
 │   └── blip-vqa-base/
-├── tmp/                  # Temporary files (auto-created)
-├── utils/                # Utility modules
-│   ├── __pycache__/
-│   ├── __init__.py
-│   ├── download_model.py # Model download script
-│   └── tmp_manage.py     # Temporary file management
-├── venv/                 # Virtual environment
-├── .env                  # Environment variables
-├── app.py                # Main Flask application
-├── main.py              # Main entry point
-├── README.md            # Project documentation
-└── requirements.txt     # Python dependencies
+├── logs/                   # Application logs (persistent)
+├── tmp/                    # Temporary files (persistent)
+└── README.md              # This file
 ```
 
 ### 1. Clone Repository
@@ -636,3 +634,220 @@ When reporting issues, please include:
 ---
 
 **Note**: This system requires significant computational resources. For production use, ensure adequate hardware and implement proper monitoring and security measures.
+
+### System Requirements
+- Docker and Docker Compose
+- NVIDIA GPU with CUDA 11.8+ support
+- NVIDIA Docker runtime (`nvidia-docker2`)
+- At least 32GB RAM recommended
+- 50GB+ available disk space for models
+
+## Quick Start
+
+### 1. Clone and Setup
+```bash
+git clone https://github.com/PnTnk/ai-model-server.git
+cd ai-model-server
+```
+
+### 2. Build and Run with Docker Compose
+```bash
+# Build and start the services
+docker-compose up --build -d
+
+# Check service status
+docker-compose ps
+
+# View logs
+docker-compose logs -f ai-model-server
+```
+
+### 3. Health Check
+```bash
+# Check if the server is running
+curl http://localhost:5000/health
+
+# Check admin status
+curl http://localhost:5000/admin/temp_status
+```
+
+## Configuration
+
+### Environment Variables
+Key environment variables that can be customized in `docker-compose.yml`:
+
+```yaml
+environment:
+  - FLASK_ENV=production          # Flask environment
+  - CUDA_VISIBLE_DEVICES=0        # GPU device selection
+  - HF_HUB_ENABLE_HF_TRANSFER=1   # Fast model downloads
+  - TOKENIZERS_PARALLELISM=false  # Tokenizer threading
+  - OMP_NUM_THREADS=4             # OpenMP threads
+  - MKL_NUM_THREADS=4             # MKL threads
+```
+
+### Resource Limits
+The service is configured with the following defaults:
+- **Memory**: 32GB limit with swap
+- **Shared Memory**: 2GB for CUDA operations
+- **GPU**: All available NVIDIA GPUs
+
+## Development
+
+### Local Development Setup
+```bash
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run locally (ensure CUDA is available)
+python main.py --host 0.0.0.0 --port 5000
+```
+
+### Building Docker Image
+```bash
+# Build production image
+docker build -t ai-model-server:latest --target production .
+
+# Build development image
+docker build -t ai-model-server:dev --target builder .
+```
+
+## Monitoring and Logging
+
+### Viewing Logs
+```bash
+# Container logs
+docker-compose logs -f ai-model-server
+
+# Application logs (persistent volume)
+docker exec -it ai-model-server tail -f /app/logs/*.log
+```
+
+### Resource Monitoring
+```bash
+# GPU usage
+nvidia-smi
+
+# Container resources
+docker stats ai-model-server
+```
+
+## Volumes and Data Persistence
+
+The application uses several persistent volumes:
+
+- **models_data**: Stores downloaded AI models
+- **logs_data**: Application logs and debugging info
+- **tmp_data**: Temporary processing files
+- **huggingface_cache**: HuggingFace model cache
+- **transformers_cache**: Transformers library cache
+- **torch_cache**: PyTorch model cache
+
+### Backup Important Data
+```bash
+# Backup models
+docker run --rm -v ai-model-server_models_data:/data -v $(pwd):/backup alpine tar czf /backup/models_backup.tar.gz -C /data .
+
+# Restore models
+docker run --rm -v ai-model-server_models_data:/data -v $(pwd):/backup alpine tar xzf /backup/models_backup.tar.gz -C /data
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**GPU Not Detected**
+```bash
+# Check NVIDIA runtime
+docker run --rm --gpus all nvidia/cuda:11.8-base nvidia-smi
+
+# Verify Docker GPU support
+docker run --rm --gpus all ai-model-server:latest python3 -c "import torch; print(torch.cuda.is_available())"
+```
+
+**Memory Issues**
+- Increase Docker memory limits in `docker-compose.yml`
+- Adjust `PYTORCH_CUDA_ALLOC_CONF` for GPU memory management
+- Monitor with `nvidia-smi` and `docker stats`
+
+**Permission Issues**
+```bash
+# Check container user
+docker exec -it ai-model-server whoami
+
+# Fix volume permissions
+docker exec -it ai-model-server chmod -R 755 /app/models /app/logs /app/tmp
+```
+
+**Model Download Failures**
+- Check internet connectivity
+- Verify HuggingFace Hub access
+- Review logs for specific error messages
+
+### Performance Tuning
+
+1. **GPU Memory Optimization**
+   ```bash
+   # Set in environment
+   PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512
+   ```
+
+2. **CPU Thread Optimization**
+   ```bash
+   # Adjust based on your CPU cores
+   OMP_NUM_THREADS=4
+   MKL_NUM_THREADS=4
+   ```
+
+3. **Memory Allocation Tuning**
+   ```bash
+   # Enable tcmalloc
+   LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libtcmalloc_minimal.so.4
+   ```
+
+## Optional Services
+
+### Redis Caching
+Uncomment the Redis service in `docker-compose.yml` for enhanced caching:
+```bash
+docker-compose up -d redis
+```
+
+### Monitoring with Prometheus
+Enable Prometheus monitoring by uncommenting the service configuration.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License.
+
+## Support
+
+For issues and support:
+- Check the troubleshooting section
+- Review container logs
+- Open an issue on GitHub
+
+## Security Notes
+
+- The container runs as non-root user `app` (UID 1000)
+- Network isolation through Docker networks
+- Volume permissions are properly configured
+- No sensitive data in environment variables by default
+
+---
+
+**Maintainer**: PnTnk  
+**Version**: 1.0.0  
+**Docker Base**: NVIDIA CUDA 11.8.0 with cuDNN 8
